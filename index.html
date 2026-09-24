@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chip's Challenge – HTML5</title>
+<link rel="stylesheet" href="css/atlas.css">
+<link rel="stylesheet" href="css/game.css">
+<div id="app">
+  <div id="view"><div id="world"></div><div id="msg"></div></div>
+  <aside id="panel">
+    <div class="lbl">LEVEL</div><div class="led" id="lv">001</div>
+    <div class="lbl">TIME</div><div class="led" id="tm">000</div>
+    <div class="lbl">CHIPS LEFT</div><div class="led" id="ch">000</div>
+    <div id="inv"></div>
+    <div id="hint"></div>
+    <div id="help">WASD / arrows: move (one tile per 0.5 s)<br>P pause · R restart · 1-9 level<br>I import JSON · E map editor<br><span id="fps">– FPS</span></div>
+  </aside>
+</div>
+<input id="levelFile" type="file" accept=".json,application/json" hidden>
+<script src="js/tiles.js"></script>
+<script src="js/levels-data.js"></script>
+<script src="js/game.js"></script>

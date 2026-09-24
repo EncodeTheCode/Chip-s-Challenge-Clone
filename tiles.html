@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8"><title>Chip's Challenge – tile catalogue</title>
+<link rel="stylesheet" href="css/atlas.css"><link rel="stylesheet" href="css/game.css">
+<style>body{display:block;padding:1em}table{border-collapse:collapse;background:#222}td{padding:2px 8px;border-bottom:1px solid #444}td:first-child{background:#8a8a8a;padding:0}</style>
+<h2>All 112 tiles, each carved from the single atlas with CSS</h2>
+<table id="t"></table>
+<script src="js/tiles.js"></script>
+<script>
+for(const t of CC.TILES){
+  const tr=document.createElement('tr'),d=document.createElement('div'),f=Object.keys(t).filter(k=>t[k]===true);
+  CC.setTile(d,t.id);
+  if(t.door)f.push('door:'+t.door);if(t.force!=null)f.push('force:'+t.force);
+  tr.innerHTML='<td></td><td>0x'+t.id.toString(16).padStart(2,'0')+'</td><td>'+t.name+'</td><td>col '+t.c+', row '+t.r+'</td><td>'+f.join(' ')+'</td>';
+  tr.firstChild.append(d);document.getElementById('t').append(tr);
+}
+</script>

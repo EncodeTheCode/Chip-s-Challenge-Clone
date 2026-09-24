@@ -1,0 +1,36 @@
+:root{--s:2}
+:root,#app{--u:calc(var(--s)*1px)}   /* one "game pixel"; JS sets an integer --s so pixel art stays crisp */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#101018;color:#ddd;font:14px monospace}
+body{display:grid;place-items:center}
+
+/* ---- Tile carving: ONE atlas image, no sliced files ------------------------------------------
+   --c/--r are the tile's column/row in the 416x512 atlas. background-position "carves" the 32x32 cell.
+   Sprite tiles (.m) have no alpha: their silhouette is the white-on-black copy 6 columns to the right,
+   applied as a luminance mask (mask-mode: luminance), so keys/monsters/Chip blend over any floor. */
+.t{width:calc(32*var(--u));height:calc(32*var(--u));image-rendering:pixelated;
+   background:var(--atlas) calc(var(--c)*-32*var(--u)) calc(var(--r)*-32*var(--u))/calc(416*var(--u)) calc(512*var(--u)) no-repeat}
+.t.m{mask-image:var(--atlas);mask-mode:luminance;mask-repeat:no-repeat;
+     mask-size:calc(416*var(--u)) calc(512*var(--u));
+     mask-position:calc((var(--c) + 6)*-32*var(--u)) calc(var(--r)*-32*var(--u))}
+
+#app{display:flex;gap:calc(8*var(--u));padding:calc(8*var(--u));background:#c0c0c0;border:calc(2*var(--u)) outset #fff;color:#000;user-select:none}
+#view{position:relative;width:calc(292*var(--u));height:calc(292*var(--u));border:calc(2*var(--u)) inset #777;overflow:hidden;background:#000;contain:paint}
+#world{position:absolute;left:0;top:0;display:grid;grid-template-columns:repeat(var(--w,1),calc(32*var(--u)));will-change:transform}
+#world>.t{position:relative}
+#world>.a{position:absolute;left:0;top:0;will-change:transform}
+.t>.t{position:absolute;left:0;top:0}
+
+#panel{width:calc(138*var(--u));display:flex;flex-direction:column;gap:calc(3*var(--u));font-size:calc(9*var(--u))}
+.lbl{font-weight:bold;letter-spacing:.05em}
+.led{background:#000;color:#ff0;font:bold calc(16*var(--u)) monospace;text-align:right;padding:calc(1*var(--u)) calc(5*var(--u));text-shadow:0 0 calc(3*var(--u)) #c80}
+#inv{display:grid;grid-template-columns:repeat(4,calc(32*var(--u)));gap:calc(2*var(--u));margin-top:calc(3*var(--u))}
+#inv .s{position:relative;width:calc(32*var(--u));height:calc(32*var(--u));background:#8a8a8a}
+#inv .s>.t{position:absolute;left:0;top:0}
+#inv i{position:absolute;right:calc(2*var(--u));bottom:0;font:bold calc(10*var(--u)) monospace}
+#hint{flex:1;min-height:calc(56*var(--u));background:#000;color:#3f3;padding:calc(4*var(--u));font-size:calc(8*var(--u));line-height:1.3}
+#help{font-size:calc(7*var(--u));line-height:1.4}
+#msg{position:absolute;inset:0;display:none;place-content:center;text-align:center;padding:calc(12*var(--u));background:#000c;color:#fff;font-size:calc(11*var(--u));line-height:1.5}
+#msg.on{display:grid}
+#msg.bad b{color:#f66}#msg.good b{color:#6f6}
+kbd{background:#444;padding:0 .3em;border-radius:2px}

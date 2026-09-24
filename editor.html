@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chip's Challenge – Map Editor</title>
+<link rel="stylesheet" href="css/editor.css">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>Chip's Challenge Map Editor</h1>
+    <div class="sub">Uses the original files(1).zip tile atlas and gameplay data. Maps are saved as portable JSON.</div>
+  </div>
+  <div class="top-actions">
+    <button id="playGameBtn" class="primary">Play game</button>
+    <button id="newBtn">New map</button>
+    <button id="importBtn">Import JSON</button>
+    <button id="saveBtn" class="primary">Save map <kbd>Ctrl+S</kbd></button>
+    <input id="fileInput" type="file" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="left panel">
+    <section>
+      <label>Level slot</label>
+      <select id="slotSelect"></select>
+      <div class="row2">
+        <button id="duplicateBtn">Duplicate</button>
+        <button id="loadSavedBtn">Load saved</button>
+      </div>
+    </section>
+    <section>
+      <h2>Level information</h2>
+      <label>Title<input id="titleInput"></label>
+      <label>Author<input id="authorInput"></label>
+      <div class="row2">
+        <label>Time limit<input id="timeInput" type="number" min="0" max="999"></label>
+        <label>Required chips<input id="chipsInput" type="number" min="0" max="999"></label>
+      </div>
+      <label>Map hint shown by yellow question mark (0x2F)<textarea id="hintInput" rows="4" placeholder="Example: Collect the keys before opening the red door."></textarea></label>
+      <div class="save-note">One hint message per map. Place the yellow <b>?</b> tile from the tile palette (0x2F) to trigger this message. It remains visible for 5 seconds after Chip steps off the tile.</div>
+    </section>
+    <section>
+      <h2>Map size</h2>
+      <div class="row2">
+        <label>Width<input id="widthInput" type="number" min="5" max="32"></label>
+        <label>Height<input id="heightInput" type="number" min="5" max="32"></label>
+      </div>
+      <button id="resizeBtn">Resize map</button>
+    </section>
+    <section>
+      <h2>Tools</h2>
+      <div class="toolgrid">
+        <button class="tool active" data-tool="paint">Paint</button>
+        <button class="tool" data-tool="erase">Erase</button>
+        <button class="tool" data-tool="actor">Actors</button>
+        <button class="tool" data-tool="path">Monster path / loop</button>
+        <button class="tool" data-tool="hiddenDirt">Hidden dirt</button>
+      </div>
+      <div class="row2">
+        <button id="undoBtn"><span>↶ Undo</span> <kbd>Ctrl+Z</kbd></button>
+        <button id="redoBtn"><span>↷ Redo</span> <kbd>Ctrl+Y</kbd></button>
+      </div>
+      <div id="editStatus" class="status">Ready.</div>
+      <div class="hidden-dirt-summary"><span id="hiddenDirtCount">0 hidden dirt tiles</span><button id="clearHiddenDirtBtn">Clear hidden dirt</button></div>
+    </section>
+    <section>
+      <h2>Actor placement</h2>
+      <div class="actor-buttons" id="actorButtons"></div>
+      <div class="row2">
+        <button id="placeNewBtn" class="activeChoice">Place new</button>
+        <button id="moveSelectedBtn">Move selected</button>
+      </div>
+      <div id="actorInspector"></div>
+    </section>
+  </aside>
+
+  <section class="center">
+    <div class="canvas-toolbar">
+      <div>
+        <strong id="mapTitle">Map</strong>
+        <span id="dirtyState" class="saved">Saved</span>
+      </div>
+      <div class="zoom-control">
+        <button id="zoomOut">−</button>
+        <input id="zoomRange" type="range" min="0.75" max="2.5" step="0.05" value="1.25">
+        <button id="zoomIn">+</button>
+        <span id="zoomLabel">125%</span>
+      </div>
+    </div>
+    <div id="mapViewport" class="map-viewport">
+      <div id="mapGrid" class="map-grid"></div>
+    </div>
+    <div class="canvas-help">
+      Paint: click/drag. Painting the original dirt block tile (0x0A) creates a movable dirt block in play mode. Erase: click/drag. Hidden dirt: click cells that should look normal until the red button/trigger (0x24) is stepped on. The trigger reveals every hidden-dirt cell once for that map. Actors: choose an actor then place it. Monster path: select any path-enabled monster and click adjacent cells in order; click its starting cell again to close the loop. Teeth (red lips) can chase Chip when she has line of sight and return to their loop when vision is lost.
+    </div>
+  </section>
+
+  <aside class="right panel">
+    <section>
+      <h2>Tile palette</h2>
+      <div class="palette-tools">
+        <input id="paletteSearch" placeholder="Search tile name or ID…">
+        <select id="paletteGroup">
+          <option value="all">All tiles</option>
+          <option value="terrain">Terrain & walls</option>
+          <option value="creatures">Creatures</option>
+          <option value="items">Keys & power-ups</option>
+          <option value="devices">Devices & objects</option>
+          <option value="chip">Chip frames</option>
+        </select>
+      </div>
+      <div class="palette-meta"><span id="paletteCount"></span><span>112 original tile IDs</span></div>
+      <div id="palette" class="palette"></div>
+    </section>
+    <section>
+      <h2>Monster tuning</h2>
+      <div class="save-actions">
+        <label>Spider ms/tile <input id="cfgSpider" type="number" min="100" max="2000" value="800"></label>
+        <label>Spiral ms/tile <input id="cfgSpiral" type="number" min="100" max="2000" value="600"></label>
+        <label>Teeth ms/tile <input id="cfgTeeth" type="number" min="100" max="2000" value="400"></label>
+        <label>Focus seconds <input id="cfgFocus" type="number" min="0.25" max="60" step="0.25" value="5"></label>
+        <label>Vision tiles <input id="cfgVision" type="number" min="1" max="32" value="10"></label>
+        <label>Focus-distance tiles <input id="cfgFocusDistance" type="number" min="1" max="32" value="10"></label>
+      </div>
+      <div class="save-note">These are editor defaults. Per-monster speed, vision, focus distance and permanent focus can be changed in the actor inspector.</div>
+    </section>
+    <section>
+      <h2>Selected tile</h2>
+      <div id="selectedTile" class="selected-card"></div>
+      <div id="tileRules" class="rules"></div><div id="monsterQuickAdd" class="quick-add"></div>
+    </section>
+    <section>
+      <h2>Save / import</h2>
+      <div class="save-actions">
+        <button id="saveDownloadBtn" class="primary">Save JSON file</button>
+        <button id="copyBtn">Copy JSON</button>
+        <button id="exportPackBtn">Save 1–9 pack</button>
+        <button id="playMapBtn">Save & play this map</button>
+      </div>
+      <div class="save-note">Autosave is kept in this browser. The downloaded JSON contains the map, hidden-dirt overlays, actors, rules and tileset metadata; it does not embed another copy of the PNG tileset.</div>
+    </section>
+  </aside>
+</main>
+<footer>Tileset: <b>tiles.png</b> · 416×512 · 32×32 cells · 112 IDs · Original CSS atlas rendering preserved for play mode.</footer>
+<script src="js/tiles.js"></script>
+<script src="js/levels-data.js"></script>
+<script src="js/editor.js"></script>
+</body>
+</html>
