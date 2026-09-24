@@ -1,6 +1,8 @@
 # Chip's Challenge – original game + compatible JSON map editor
 
-This build uses the original game client from `files(1).zip` as the gameplay/rendering base. The following original files are kept unchanged:
+![Gameplay screenshot](screenshots/gameplay_screenshot.png)
+
+This build uses the original game client data however only the tiles from Chip's Challenge as the gameplay/rendering base. The following original files are kept unchanged:
 
 - `css/atlas.css` – original CSS atlas carving/masking
 - `css/game.css` – original game layout and pixel-art presentation
@@ -9,6 +11,8 @@ This build uses the original game client from `files(1).zip` as the gameplay/ren
 - `tiles.html` – original tile reference page
 
 The playable renderer in `js/game.js` keeps the original 32×32 tiles, 30 FPS loop, 140 ms visual step animation, and 500 ms player movement rate. It adds a small compatibility layer for JSON levels, 1–9 hotkeys, direct JSON import (`I`), and opening the editor (`E`).
+
+![Chip wants chips](screenshots/chips_screenshot.png)
 
 ## Open the game
 Open `index.html` in a browser.
@@ -21,6 +25,8 @@ Controls:
 - 1–9: choose bundled level
 - I: import a JSON level
 - E: open the map editor
+
+![Map editor](screenshots/map_editor.png)
 
 ## Open the editor
 Open `editor.html`.
@@ -40,6 +46,8 @@ The editor is separate from the game runtime, so gameplay state cannot accidenta
 - Use “Save & play this map” to hand the current editor map to `index.html` without changing the map data.
 - Browser autosave is kept per level slot for convenience.
 
+![Fire hazard screenshot](screenshots/fire_hazard_screenshot.png)
+
 ## JSON format
 
 Each level stores:
@@ -55,6 +63,7 @@ The PNG is deliberately not embedded in JSON. A map file therefore stays small a
 
 Bundled editable maps are in `levels/level-01.json` through `levels/level-09.json`.
 
+![Multiple monsters screenshot](screenshots/multiple_monsters_screenshot.png)
 
 ## Custom monsters and blocks (v4)
 The editor can create a monster actor from the exact monster tile selected in the original atlas. The actor JSON stores `type: "monster"`, the linked `tileId`, movement speed, facing direction, loop `path`, and optional `aiChase`/`visionRange`. The game renders the same atlas sprite and keeps the authored path association. Teeth (the large red-lipped CC1 monster, tile family `0x54–0x57`) can chase Chip when they have orthogonal line of sight, then return to the nearest point of their authored path when they lose sight.
@@ -62,6 +71,8 @@ The editor can create a monster actor from the exact monster tile selected in th
 Dirt blocks are real moving actors. Chip can push them only when the destination square is not occupied or a blocking wall/door/socket. Blocks can slide on ice and force floors, and pushing a block into water converts the water square to dirt as in the classic mechanic. A block with no free destination remains in place, including when pushed into a corner.
 
 The editor's JSON is the source of truth for authored monster paths and block placement; gameplay changes are runtime-only and are not written back to the level JSON.
+
+![Chase screenshot](screenshots/chase_screenshot.png)
 
 ## Latest monster and thief behavior
 
