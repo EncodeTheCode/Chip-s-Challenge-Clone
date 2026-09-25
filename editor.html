@@ -45,8 +45,8 @@
     <section>
       <h2>Map size</h2>
       <div class="row2">
-        <label>Width<input id="widthInput" type="number" min="5" max="32"></label>
-        <label>Height<input id="heightInput" type="number" min="5" max="32"></label>
+        <label>Width<input id="widthInput" type="number" min="5" max="992"></label>
+        <label>Height<input id="heightInput" type="number" min="5" max="992"></label>
       </div>
       <button id="resizeBtn">Resize map</button>
     </section>
@@ -56,7 +56,7 @@
         <button class="tool active" data-tool="paint">Paint</button>
         <button class="tool" data-tool="erase">Erase</button>
         <button class="tool" data-tool="actor">Actors</button>
-        <button class="tool" data-tool="path">Monster path / loop</button>
+        <button class="tool" data-tool="path">Draw monster path</button>
         <button class="tool" data-tool="hiddenDirt">Hidden dirt</button>
       </div>
       <div class="row2">
@@ -91,10 +91,12 @@
       </div>
     </div>
     <div id="mapViewport" class="map-viewport">
-      <div id="mapGrid" class="map-grid"></div>
+      <div id="mapStage" class="map-stage">
+        <div id="mapGrid" class="map-grid"></div>
+      </div>
     </div>
     <div class="canvas-help">
-      Paint: click/drag. Painting the original dirt block tile (0x0A) creates a movable dirt block in play mode. Erase: click/drag. Hidden dirt: click cells that should look normal until the red button/trigger (0x24) is stepped on. The trigger reveals every hidden-dirt cell once for that map. Actors: choose an actor then place it. Monster path: select any path-enabled monster and click adjacent cells in order; click its starting cell again to close the loop. Teeth (red lips) can chase Chip when she has line of sight and return to their loop when vision is lost.
+      The editor displays at most 32×32 map tiles at a time and reuses that window while you scroll. Paint: click/drag. Painting the original dirt block tile (0x0A) creates a movable dirt block in play mode. Erase: click/drag. Hidden dirt: click cells that should look normal until the red button/trigger (0x24) is stepped on. The trigger reveals every hidden-dirt cell once for that map. Actors: choose an actor then place it. Monster paths: select a monster, choose Path 1–6, click <b>Draw path</b>, then click up to 50 waypoints anywhere on the map. Waypoints do <b>not</b> need to be adjacent and do not need to start or end on a special tile; the game routes between them automatically. Gliders and custom monsters can use up to six paths, with up to 50 waypoints in each path. Custom monsters have no button trigger attached by default; optionally attach the small tan/brown button (0x27), small red button (0x24), or both, then choose freeze/resume or nearest-station behavior. The small brown button <b>0x27</b> acts as an ON/OFF switch for their movement: the first press can start an idle route, the next press freezes them at their current position, and the following press resumes from the same path/waypoint state. A Glider stops at a big station <b>0x2B</b> if it encounters one, or when it reaches the final waypoint. The station is optional. Teeth (red lips) can chase Chip when she has line of sight and return to their path when focus is lost.
     </div>
   </section>
 
@@ -119,6 +121,7 @@
       <h2>Monster tuning</h2>
       <div class="save-actions">
         <label>Spider ms/tile <input id="cfgSpider" type="number" min="100" max="2000" value="800"></label>
+        <label>Glider ms/tile <input id="cfgGlider" type="number" min="100" max="2000" value="450"></label>
         <label>Spiral ms/tile <input id="cfgSpiral" type="number" min="100" max="2000" value="600"></label>
         <label>Teeth ms/tile <input id="cfgTeeth" type="number" min="100" max="2000" value="400"></label>
         <label>Focus seconds <input id="cfgFocus" type="number" min="0.25" max="60" step="0.25" value="5"></label>
