@@ -16,9 +16,10 @@ body{display:grid;place-items:center}
 
 #app{display:flex;gap:calc(8*var(--u));padding:calc(8*var(--u));background:#c0c0c0;border:calc(2*var(--u)) outset #fff;color:#000;user-select:none}
 #view{position:relative;width:calc(292*var(--u));height:calc(292*var(--u));border:calc(2*var(--u)) inset #777;overflow:hidden;background:#000;contain:paint}
-#world{position:absolute;left:0;top:0;display:grid;grid-template-columns:repeat(var(--w,1),calc(32*var(--u)));will-change:transform}
-#world>.t{position:relative}
-#world>.a{position:absolute;left:0;top:0;will-change:transform}
+#world{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
+.game-layer{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;will-change:transform}
+#world .tile-instance{position:absolute;left:0;top:0;contain:strict}
+#world .a{position:absolute;left:0;top:0;will-change:transform}
 .t>.t{position:absolute;left:0;top:0}
 
 #panel{width:calc(138*var(--u));display:flex;flex-direction:column;gap:calc(3*var(--u));font-size:calc(9*var(--u))}
