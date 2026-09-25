@@ -21,7 +21,10 @@ const MONSTER_CONFIG=window.CC_MONSTER_CONFIG=Object.assign({
   gliderMoveMs:450,
   gliderTriggerTile:0x27,
   gliderStationTile:0x2B,
-  maxGliderPaths:6
+  maxGliderPaths:6,
+  pathRouteChunkTiles:32,
+  pathRouteMarginTiles:10,
+  pathRouteMaxSteps:128
 },window.CC_MONSTER_CONFIG||{});
 const GLIDER_TRIGGER_TILE=0x27,GLIDER_STATION_TILE=0x2B,MAX_GLIDER_PATHS=6;
 let ACTIVE_CONFIG=Object.assign({},MONSTER_CONFIG);
@@ -284,12 +287,87 @@ function requestStationStop(m){
   }
   m.stationStopPending=true;m.stationTargetIndex=target;m.pathPaused=false;m.pathWaiting=false;m.railActive=true;m.mode='rail';return true;
 }
+const ROUTE_CHUNK_TILES=()=>Math.max(8,Math.min(64,Number(ACTIVE_CONFIG.pathRouteChunkTiles)||32));
+const ROUTE_MARGIN_TILES=()=>Math.max(4,Math.min(20,Number(ACTIVE_CONFIG.pathRouteMarginTiles)||10));
+const ROUTE_MAX_STEPS=()=>Math.max(32,Math.min(256,Number(ACTIVE_CONFIG.pathRouteMaxSteps)||128));
+function localRouteDirections(m,goalX,goalY){
+  const sx=m.x,sy=m.y;
+  if(sx===goalX&&sy===goalY)return [];
+  const minX=Math.max(0,Math.min(sx,goalX)-ROUTE_MARGIN_TILES()),maxX=Math.min(W-1,Math.max(sx,goalX)+ROUTE_MARGIN_TILES());
+  const minY=Math.max(0,Math.min(sy,goalY)-ROUTE_MARGIN_TILES()),maxY=Math.min(H-1,Math.max(sy,goalY)+ROUTE_MARGIN_TILES());
+  const ww=maxX-minX+1,hh=maxY-minY+1,size=ww*hh;
+  // Compact per-route typed arrays. Unlike the old implementation, allocation is
+  // proportional to one short waypoint segment, never to the 992x992 map.
+  const gScore=new Int16Array(size);gScore.fill(32767);
+  const parent=new Int32Array(size);parent.fill(-1);
+  const closed=new Uint8Array(size);
+  const heapNode=new Int32Array(size),heapF=new Int32Array(size),heapPos=new Int32Array(size);heapPos.fill(-1);
+  let heapSize=0;
+  const h=(x,y)=>Math.abs(x-goalX)+Math.abs(y-goalY);
+  const swap=(a,b)=>{const na=heapNode[a],nb=heapNode[b],fa=heapF[a];heapNode[a]=nb;heapF[a]=heapF[b];heapNode[b]=na;heapF[b]=fa;heapPos[nb]=a;heapPos[na]=b};
+  const pushNode=(n,f)=>{let i=heapSize++;heapNode[i]=n;heapF[i]=f;heapPos[n]=i;while(i>0){const parentI=(i-1)>>1;if(heapF[parentI]<=heapF[i])break;swap(parentI,i);i=parentI}};
+  const decrease=(n,f)=>{let i=heapPos[n];if(i<0){pushNode(n,f);return}if(f>=heapF[i])return;heapF[i]=f;while(i>0){const parentI=(i-1)>>1;if(heapF[parentI]<=heapF[i])break;swap(parentI,i);i=parentI}};
+  const popNode=()=>{if(!heapSize)return -1;const out=heapNode[0],last=--heapSize;if(last>=0){heapNode[0]=heapNode[last];heapF[0]=heapF[last];heapPos[heapNode[0]]=0;let i=0;while(true){const l=i*2+1,r=l+1;let best=i;if(l<heapSize&&heapF[l]<heapF[best])best=l;if(r<heapSize&&heapF[r]<heapF[best])best=r;if(best===i)break;swap(i,best);i=best}}heapPos[out]=-2;return out};
+  const sxL=sx-minX,syL=sy-minY,gx=goalX-minX,gy=goalY-minY,start=syL*ww+sxL,target=gy*ww+gx;
+  if(start<0||target<0||start>=size||target>=size)return null;
+  gScore[start]=0;pushNode(start,h(sx,sy));
+  while(heapSize){
+    const cur=popNode();if(cur<0)break;if(closed[cur])continue;closed[cur]=1;if(cur===target)break;
+    const cx=cur%ww,cy=(cur/ww)|0,nc=gScore[cur]+1;
+    for(let d=0;d<4;d++){
+      const nx=cx+DX[d],ny=cy+DY[d];if(nx<0||nx>=ww||ny<0||ny>=hh)continue;
+      const ni=ny*ww+nx;if(closed[ni])continue;
+      const wx=nx+minX,wy=ny+minY,gi=wy*W+wx;
+      if(!monsterPass(m,g[gi]))continue;
+      if(gi!==goalY*W+goalX && nc>=gScore[ni])continue;
+      if(nc>=gScore[ni])continue;
+      gScore[ni]=nc;parent[ni]=cur;decrease(ni,nc+h(wx,wy));
+    }
+  }
+  if(start!==target&&parent[target]<0)return null;
+  const dirs=[];let j=target,guard=0;
+  while(j!==start&&parent[j]>=0&&guard++<ROUTE_MAX_STEPS()){
+    const prev=parent[j],px=prev%ww,py=(prev/ww)|0,cx=j%ww,cy=(j/ww)|0;
+    const dd=DX.findIndex((_,d)=>px+DX[d]===cx&&py+DY[d]===cy);if(dd<0)return null;dirs.push(dd);j=prev;
+  }
+  if(j!==start)return null;dirs.reverse();return dirs;
+}
+function chooseRouteGoal(m,target){
+  const dx=target.x-m.x,dy=target.y-m.y,dist=Math.abs(dx)+Math.abs(dy);
+  if(dist<=ROUTE_CHUNK_TILES())return {x:target.x,y:target.y};
+  const ratio=ROUTE_CHUNK_TILES()/dist;
+  let gx=Math.round(m.x+dx*ratio),gy=Math.round(m.y+dy*ratio);
+  gx=Math.max(0,Math.min(W-1,gx));gy=Math.max(0,Math.min(H-1,gy));
+  if(gx===m.x&&gy===m.y){if(Math.abs(dx)>=Math.abs(dy))gx+=dx>0?1:-1;else gy+=dy>0?1:-1}
+  return {x:Math.max(0,Math.min(W-1,gx)),y:Math.max(0,Math.min(H-1,gy))};
+}
 function naturalRouteStep(m,target){
-  // All authored-path/station movement is step-wise from the monster's real current
-  // coordinates. This helper intentionally never assigns m.x/m.y to a waypoint.
+  // Authored paths are traversed in cached short segments. The route is calculated
+  // once for a segment and its directions are consumed one tile at a time, instead
+  // of running a full-map A* search on every monster movement. This is the key large-
+  // map optimization and never moves m.x/m.y directly to a waypoint.
   if(!target||!Number.isInteger(target.x)||!Number.isInteger(target.y))return -1;
-  if(m.x===target.x&&m.y===target.y)return -1;
-  return chaseTo(m,target.x,target.y,Math.max(ACTIVE_CONFIG.monsterMaxPathTiles,W*H));
+  if(m.x===target.x&&m.y===target.y){m.routeDirs=null;m.routePos=0;return -1;}
+  const targetChanged=m.routeTargetX!==target.x||m.routeTargetY!==target.y;
+  if(targetChanged){m.routeTargetX=target.x;m.routeTargetY=target.y;m.routeDirs=null;m.routePos=0;m.routeGoalX=null;m.routeGoalY=null;}
+  if(Array.isArray(m.routeDirs)&&m.routePos<m.routeDirs.length){
+    const d=m.routeDirs[m.routePos];
+    if(canM(m,d))return d;
+    m.routeDirs=null;m.routePos=0;
+  }
+  if(m.routeGoalX!==m.x||m.routeGoalY!==m.y||!Array.isArray(m.routeDirs)||m.routePos>=m.routeDirs.length){
+    const goal=chooseRouteGoal(m,target);
+    const dirs=localRouteDirections(m,goal.x,goal.y);
+    m.routeGoalX=goal.x;m.routeGoalY=goal.y;m.routeDirs=dirs||[];m.routePos=0;
+    if(!dirs||!dirs.length){
+      // Cheap fallback for an obstructed chunk: choose one legal step that reduces
+      // Manhattan distance. The next update retries the local route from there.
+      const choices=[];if(Math.abs(target.x-m.x)>=Math.abs(target.y-m.y)){choices.push(target.x>m.x?3:1);choices.push(target.y>m.y?2:0)}else{choices.push(target.y>m.y?2:0);choices.push(target.x>m.x?3:1)}
+      for(const d of choices)if(canM(m,d)){m.routeDirs=[d];m.routePos=0;break}
+    }
+  }
+  if(Array.isArray(m.routeDirs)&&m.routePos<m.routeDirs.length){const d=m.routeDirs[m.routePos];if(canM(m,d))return d;}
+  m.routeDirs=null;m.routePos=0;return -1;
 }
 function stationStopStep(m){
   if(!m.stationStopPending)return null;
@@ -515,7 +593,14 @@ function configuredPathSlots(paths){
   for(let i=0;i<Math.min(MAX_GLIDER_PATHS,paths.length);i++)if(Array.isArray(paths[i])&&paths[i].length)out.push(i);
   return out;
 }
-function pathActor(m){return !!m&&((m.k==='glider')||m.customMonster===true)}
+function pathActor(m){
+  if(!m)return false;
+  const hasPaths=configuredPathSlots(actorPathStore(m)).length>0;
+  // Gliders and custom tile-linked monsters only enter the shared authored-path
+  // controller when they actually have a path. Without path data, a custom spider
+  // can still use its normal Spider A* AI instead of becoming permanently frozen.
+  return hasPaths&&(m.pathMode==='loop'||m.pathMode==='rail'||m.pathMode==='path');
+}
 function actorPathStore(m){return m.k==='glider'?(m.railPaths||[]):(m.waypointPaths||[])}
 function startPathRoute(m,paths,slotPos=0){
   const slots=configuredPathSlots(paths);if(!slots.length)return false;
@@ -535,7 +620,7 @@ function finishControlledPath(m,paths){
   const slots=configuredPathSlots(paths),pos=slots.indexOf(Number(m.pathSlot));if(!slots.length||pos<0)return;
   const p=paths[m.pathSlot]||[],atEnd=p.length===0||m.li>=p.length-1;
   if(m.pathBehavior==='sequential'){
-    if(!atEnd&&!station)return;
+    if(!atEnd)return;
     m.railActive=false;m.pathWaiting=true;m.mode='station';m.pathDirection=1;m.railPhase='forward';return;
   }
   if(!atEnd)return;
@@ -567,12 +652,14 @@ function finishControlledPath(m,paths){
 }
 function controlledPathStep(m){
   if(m.finalPathHold)return -1;
-  // A continuous monster can temporarily be in station-return mode when the
-  // editor option 'Continue to nearest station' is selected. That override has
-  // priority over normal waypoint following until the station is reached or the
-  // small brown button is pressed again.
+  // A continuous authored path starts automatically from the monster's actual
+  // position. Sequential/button-controlled paths still wait for their trigger.
   if(m.stationStopPending){const stationStep=stationStopStep(m);if(stationStep!==null)return stationStep;}
-  const paths=actorPathStore(m),slots=configuredPathSlots(paths);if(!slots.length||!m.pathStarted||m.pathWaiting||!m.railActive)return -1;
+  const paths=actorPathStore(m),slots=configuredPathSlots(paths);if(!slots.length)return -1;
+  if(!m.pathStarted && m.pathBehavior==='loop' && !m.pathPaused && !m.pathWaiting){
+    if(!startPathRoute(m,paths,0))return -1;
+  }
+  if(!m.pathStarted||m.pathWaiting||!m.railActive)return -1;
   let slot=Number(m.activePathSlot??m.pathSlot);if(!slots.includes(slot)){slot=slots[0];m.activePathSlot=slot;m.pathSlot=slot;m.pathSlotPos=0}
   let p=paths[slot]||[];if(!p.length)return -1;
 
@@ -607,7 +694,7 @@ function controlledPathStep(m){
     target=(m.path||paths[m.pathSlot]||[])[m.li];
   }
   if(!target)return -1;
-  m.path=(paths[m.pathSlot]||[]).slice();
+  m.path=paths[m.pathSlot]||[];
   let d=naturalRouteStep(m,target);
   if(d<0){const dx=target.x-m.x,dy=target.y-m.y;if(Math.abs(dx)+Math.abs(dy)===1)d=DX.findIndex((_,q)=>m.x+DX[q]===target.x&&m.y+DY[q]===target.y)}
   return d;
@@ -670,12 +757,26 @@ function handleMonsterBombCollision(m){
 }
 function stepMon(m){
   const fam=MONSTER_FAMILY[m.k]||MONSTER_FAMILY.bug; m.next=gt+(m.speed||fam.defaultSpeed);
-  let d=-1;
-  // Gliders and custom monsters use the six-path waypoint controller.
-  // A small tan/brown button toggles pathActor pause/resume globally.
-  if(pathActor(m) && m.pathPaused){m.next=Infinity;return}
-  if(pathActor(m)){d=controlledPathStep(m)}
-  else if(m.k==='bug'&&m.pathMode!=='loop'){d=spiderChase(m);if(d<0||!canSpider(m,d)){d=-1;for(const q of [1,0,3,2]){const e=(m.d+q)&3;if(canSpider(m,e)){d=e;break}}}}
+  let d=-1,pathDriven=false;
+  const hasAuthoredPath=pathActor(m);
+  // Any path-capable monster can use the same authored waypoint controller as a Glider.
+  // The original Spider A* remains the default until authored paths are explicitly enabled.
+  if(hasAuthoredPath && m.pathPaused){m.next=Infinity;return}
+  if(m.k==='teeth'&&m.aiChase&&hasAuthoredPath){
+    const visible=hasVision(m);
+    if(visible){m.hasFocused=true;m.focusUntil=m.neverLoseFocus?Number.POSITIVE_INFINITY:gt+(m.focusMs||ACTIVE_CONFIG.teethFocusMs);}
+    const cheb=Math.max(Math.abs(chip.x-m.x),Math.abs(chip.y-m.y));
+    const focusActive=m.hasFocused && (m.neverLoseFocus || (gt<m.focusUntil && cheb<=m.focusLoseDistanceTiles));
+    if(focusActive){m.mode='chase';d=chaseTo(m,chip.x,chip.y,ACTIVE_CONFIG.monsterMaxPathTiles)}
+    else {
+      if(m.mode==='chase')m.mode='return';
+      if(m.mode==='return')d=returnToPath(m);
+      else {d=controlledPathStep(m);pathDriven=true;}
+      if(d>=0)pathDriven=true;
+    }
+  }
+  else if(hasAuthoredPath){d=controlledPathStep(m);pathDriven=true}
+  else if(m.k==='bug'&&(!hasAuthoredPath||m.pathMode!=='loop')){d=spiderChase(m);if(d<0||!canSpider(m,d)){d=-1;for(const q of [1,0,3,2]){const e=(m.d+q)&3;if(canSpider(m,e)){d=e;break}}}}
   else if(m.k==='teeth'&&m.aiChase){
     const visible=hasVision(m);
     if(visible){m.hasFocused=true;m.focusUntil=m.neverLoseFocus?Number.POSITIVE_INFINITY:gt+(m.focusMs||ACTIVE_CONFIG.teethFocusMs);}
@@ -687,7 +788,13 @@ function stepMon(m){
   else if(m.aiChase){d=focusChase(m);if(d<0&&m.pathMode==='loop')d=returnToPath(m)}
   else if(m.pathMode==='loop'){d=m.multiPathEnabled?followPathCycle(m,m.waypointPaths||[]):followPath(m)}
   if(!canM(m,d))return;
-  m.d=d;m.ox=m.x;m.oy=m.y;m.x+=DX[d];m.y+=DY[d];m.t0=gt;m.dur=Math.min(m.speed||fam.defaultSpeed,300);m.sid=-1;if(handleMonsterBombCollision(m))return;if(pathActor(m)){if(m.stationStopPending){stationStopStep(m)}else finishControlledPath(m,actorPathStore(m));}else if(m.k==='glider')finishGliderPath(m);
+  m.d=d;m.ox=m.x;m.oy=m.y;m.x+=DX[d];m.y+=DY[d];m.t0=gt;m.dur=Math.min(m.speed||fam.defaultSpeed,300);m.sid=-1;
+  if(handleMonsterBombCollision(m))return;
+  // Consume exactly one cached route direction after the movement has actually committed.
+  // This avoids recomputing A* for every tile while still allowing a blocked/dynamic step
+  // to invalidate and rebuild the short route on the next monster tick.
+  if(pathDriven&&Array.isArray(m.routeDirs)&&m.routePos<m.routeDirs.length)m.routePos++;
+  if(hasAuthoredPath&&pathDriven){if(m.stationStopPending){stationStopStep(m)}else finishControlledPath(m,actorPathStore(m));}
 }
 function hit(){for(const m of mons)if(m.x===chip.x&&m.y===chip.y)return die(MSG[m.k]||'Chip died to a monster.')}
 /* ---------- state / UI ---------- */
